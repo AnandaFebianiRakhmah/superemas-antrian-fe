@@ -1,0 +1,8 @@
+{
+  "appId": "com.superemas.antrian",
+  "appName": "Sistem Antrian Superemas",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
