@@ -17,6 +17,31 @@ class AudioQueueService {
     this.queue = [];
     this.isPlaying = false;
     this.currentAudio = null;
+    this.audioCache = {};
+    this.preloadAll();
+  }
+
+  /**
+   * Preload all static MP3 files to cache them in browser memory.
+   */
+  preloadAll() {
+    const keys = [
+      'nomor-antrian',
+      'silahkan-menuju',
+      'loket-1',
+      'loket-2',
+      'a',
+      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
+    ];
+
+    keys.forEach(key => {
+      const path = this.getAudioPath(key);
+      const audio = new Audio(path);
+      audio.preload = 'auto';
+      audio.load(); // Request browser to start loading audio file
+      this.audioCache[path] = audio;
+    });
+    console.log('Preloaded audio cache initialized for speed optimization');
   }
 
   /**
@@ -30,7 +55,6 @@ class AudioQueueService {
       return;
     }
 
-    // DEBUG log as requested
     console.log('Queue called:', queueNumber);
 
     this.queue.push({ queueNumber, counterNumber });
@@ -62,6 +86,7 @@ class AudioQueueService {
    * Play the sequence of audio files for a single call.
    */
   async playCallSequence(queueNumber, counterNumber) {
+    console.log('Announcement started');
     const playlist = [];
 
     // 1. "Nomor Antrian" introduction
@@ -81,12 +106,13 @@ class AudioQueueService {
     const cleanCounter = counterNumber.toString().toLowerCase().replace(/loket/g, '').trim();
     playlist.push(this.getAudioPath(`loket-${cleanCounter}`));
 
-    console.log('Playing queue audio playlist:', playlist);
+    console.log('Audio sequence loaded');
 
     // Play all files in the playlist sequentially
     for (const src of playlist) {
       await this.playFile(src);
     }
+    console.log('Announcement completed');
   }
 
   /**
@@ -123,27 +149,42 @@ class AudioQueueService {
 
   /**
    * Plays a single audio file and returns a Promise that resolves when it ends
-   * or if playback fails/is prevented.
+   * or if playback fails/is prevented. Uses cached Audio instances for zero delay.
    */
   playFile(src) {
     return new Promise((resolve) => {
-      const audio = new Audio(src);
+      let audio = this.audioCache[src];
+      
+      if (!audio) {
+        audio = new Audio(src);
+        audio.preload = 'auto';
+        audio.load();
+        this.audioCache[src] = audio;
+      }
+
       this.currentAudio = audio;
+      audio.currentTime = 0; // Rewind to start in case of reuse
 
       audio.onended = () => {
-        this.currentAudio = null;
+        if (this.currentAudio === audio) {
+          this.currentAudio = null;
+        }
         resolve();
       };
 
       audio.onerror = (e) => {
         console.error(`Audio error for ${src}:`, e);
-        this.currentAudio = null;
+        if (this.currentAudio === audio) {
+          this.currentAudio = null;
+        }
         resolve(); // Resolve to avoid locking the queue
       };
 
       audio.play().catch((err) => {
         console.warn(`Audio playback prevented or failed for ${src}:`, err);
-        this.currentAudio = null;
+        if (this.currentAudio === audio) {
+          this.currentAudio = null;
+        }
         resolve(); // Resolve to avoid locking the queue
       });
     });
@@ -156,6 +197,7 @@ class AudioQueueService {
     this.queue = [];
     if (this.currentAudio) {
       this.currentAudio.pause();
+      this.currentAudio.currentTime = 0;
       this.currentAudio = null;
     }
     this.isPlaying = false;

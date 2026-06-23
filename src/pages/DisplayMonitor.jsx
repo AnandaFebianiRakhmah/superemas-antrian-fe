@@ -38,57 +38,7 @@ function formatTicketTime(date) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// ─── Speech Synthesis ──────────────────────────────────────
-function speakQueue(queueNumber, counterNumber) {
-  if (!('speechSynthesis' in window)) return;
-  window.speechSynthesis.cancel();
 
-  const text = `Nomor antrian ${queueNumber.replace('-', ' ')}, silakan menuju Loket ${counterNumber}`;
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'id-ID';
-  utterance.rate = 0.85;
-  utterance.pitch = 1.05; // Slightly higher pitch for female-sounding tone if fallback voice is used
-  utterance.volume = 1;
-
-  const voices = window.speechSynthesis.getVoices();
-  const idVoices = voices.filter((v) => v.lang.toLowerCase().startsWith('id'));
-
-  let idVoice = null;
-  if (idVoices.length > 0) {
-    // 1. Try to find Microsoft Gadis (natural female Indonesian voice)
-    idVoice = idVoices.find((v) => v.name.toLowerCase().includes('gadis'));
-
-    // 2. Try to find Google Bahasa Indonesia (default female on Android/Chrome)
-    if (!idVoice) {
-      idVoice = idVoices.find((v) => v.name.toLowerCase().includes('google'));
-    }
-
-    // 3. Try to find Dina or Damayanti (standard iOS/macOS female voices)
-    if (!idVoice) {
-      idVoice = idVoices.find(
-        (v) =>
-          v.name.toLowerCase().includes('dina') ||
-          v.name.toLowerCase().includes('damayanti')
-      );
-    }
-
-    // 4. Try to find any other Indonesian voice that is not the known male voice (Ardi)
-    if (!idVoice) {
-      idVoice = idVoices.find((v) => !v.name.toLowerCase().includes('ardi'));
-    }
-
-    // 5. Fallback to the first available Indonesian voice
-    if (!idVoice) {
-      idVoice = idVoices[0];
-    }
-  }
-
-  if (idVoice) {
-    utterance.voice = idVoice;
-  }
-
-  window.speechSynthesis.speak(utterance);
-}
 
 
 // ─── Notification Sound ────────────────────────────────────
@@ -157,7 +107,6 @@ export default function DisplayMonitor() {
       hasInteracted.current = true;
       document.removeEventListener('click', enableAudio);
       document.removeEventListener('touchstart', enableAudio);
-      if ('speechSynthesis' in window) window.speechSynthesis.getVoices();
     };
     document.addEventListener('click', enableAudio);
     document.addEventListener('touchstart', enableAudio);
@@ -359,7 +308,6 @@ export default function DisplayMonitor() {
       className="display-root"
       onClick={() => {
         hasInteracted.current = true;
-        if ('speechSynthesis' in window) window.speechSynthesis.getVoices();
       }}
     >
       {/* ── Background Orbs (Premium Theme) ── */}

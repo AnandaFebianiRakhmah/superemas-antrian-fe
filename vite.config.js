@@ -8,11 +8,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'https://classical-ricky-superemas-23d4a4a4.koyeb.app',
         changeOrigin: true,
       },
       '/socket.io': {
-        target: 'http://localhost:3000',
+        target: 'https://classical-ricky-superemas-23d4a4a4.koyeb.app',
         changeOrigin: true,
         ws: true,
       },
