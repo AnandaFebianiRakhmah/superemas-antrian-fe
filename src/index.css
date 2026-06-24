@@ -259,12 +259,20 @@ body::after {
 
 /* ===== Print styles ===== */
 @media print {
-  body {
-    background: white;
-    color: black;
+  body * {
+    visibility: hidden;
   }
-  .no-print {
-    display: none !important;
+
+  #print-ticket,
+  #print-ticket * {
+    visibility: visible;
+  }
+
+  #print-ticket {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 58mm;
   }
 }
 

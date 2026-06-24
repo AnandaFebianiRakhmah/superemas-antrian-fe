@@ -3,8 +3,9 @@ import { useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import api from '../services/api';
 import { useToast } from '../components/ui/Toast';
-import { printerService } from '../services/printerService';
 import audioQueueService from '../services/audioQueueService';
+import { Modal } from '../components/ui/Modal';
+import { ThermalTicket } from '../components/ThermalTicket';
 
 
 // ─── Helpers ───────────────────────────────────────────────
@@ -100,6 +101,7 @@ export default function DisplayMonitor() {
   // Kiosk ticket creation state
   const [createdTicket, setCreatedTicket] = useState(null);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   // Enable audio on first user interaction
   useEffect(() => {
@@ -250,31 +252,17 @@ export default function DisplayMonitor() {
       });
       const ticket = res.data.data;
 
-      setCreatedTicket({
+      const newTicket = {
         number: ticket.queue_number,
         estimated: ticket.estimated_waiting,
         time: new Date().toLocaleString('id-ID', {
           dateStyle: 'medium',
           timeStyle: 'medium'
         })
-      });
-
-      // Format ticket data for Bluetooth/ESC/POS printer
-      const ticketData = {
-        branch: branchName || `Cabang ${branchId}`,
-        number: ticket.queue_number,
-        date: formatTicketDate(new Date()),
-        time: formatTicketTime(new Date()),
       };
 
-      try {
-        await printerService.print(ticketData);
-      } catch (printErr) {
-        console.error('Print failed:', printErr);
-        toast.error('Printer belum terhubung');
-      }
-
-      setIsPrinting(false);
+      setCreatedTicket(newTicket);
+      setShowPrintModal(true);
     } catch (err) {
       console.error(err);
       setIsPrinting(false);
@@ -282,26 +270,19 @@ export default function DisplayMonitor() {
     }
   };
 
-  const handleCetakLagi = async () => {
-    if (!createdTicket) return;
-    try {
-      const ticketData = {
-        branch: branchName || `Cabang ${branchId}`,
-        number: createdTicket.number,
-        date: formatTicketDate(new Date()),
-        time: formatTicketTime(new Date()),
-      };
-
-      try {
-        await printerService.print(ticketData);
-      } catch (printErr) {
-        console.error('Reprint failed:', printErr);
-        toast.error('Printer belum terhubung');
-      }
-    } catch (err) {
-      console.error(err);
+  // Trigger window.print() once the print modal is open and ticket data is available
+  useEffect(() => {
+    if (showPrintModal && createdTicket) {
+      const timer = setTimeout(() => {
+        window.print();
+        // Reset state after printing finishes
+        setShowPrintModal(false);
+        setCreatedTicket(null);
+        setIsPrinting(false);
+      }, 500);
+      return () => clearTimeout(timer);
     }
-  };
+  }, [showPrintModal, createdTicket]);
 
   return (
     <div
@@ -458,25 +439,6 @@ export default function DisplayMonitor() {
                   <span>{isPrinting ? 'MENCETAK...' : 'CETAK TIKET'}</span>
                 </div>
               </button>
-
-              {createdTicket && (
-                <div className="kiosk-ticket-info animate-fade-in">
-                  <p className="ticket-info-title">NOMOR ANDA</p>
-                  <p className="ticket-info-num">{createdTicket.number}</p>
-
-                  <div className="ticket-info-wait">
-                    <span className="wait-label">Estimasi Menunggu:</span>
-                    <span className="wait-value">{createdTicket.estimated} Menit</span>
-                  </div>
-
-                  <button className="kiosk-reprint-btn" onClick={handleCetakLagi}>
-                    <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.706 9h-2.744" />
-                    </svg>
-                    CETAK LAGI
-                  </button>
-                </div>
-              )}
             </div>
 
             <div className="kiosk-footer">
@@ -486,19 +448,19 @@ export default function DisplayMonitor() {
         </div>
       </div>
 
-      {/* ── Hidden thermal print layout (58mm) ── */}
-      {createdTicket && (
-        <div className="ticket-print-layout">
-          <div className="ticket-header">SUPER EMAS INDONESIA</div>
-          <div className="ticket-branch">Cabang: {branchName}</div>
-          <div className="ticket-divider">--------------------------------</div>
-          <div className="ticket-label">Nomor Antrian</div>
-          <div className="ticket-number">{createdTicket.number}</div>
-          <div className="ticket-divider">--------------------------------</div>
-          <div className="ticket-time">{createdTicket.time}</div>
-          <div className="ticket-footer">Terima kasih telah menunggu.</div>
-        </div>
-      )}
+      {/* Modal Cetak Tiket */}
+      <Modal
+        isOpen={showPrintModal}
+        onClose={() => {
+          setShowPrintModal(false);
+          setCreatedTicket(null);
+          setIsPrinting(false);
+        }}
+        title="Mencetak Tiket Antrian..."
+        size="sm"
+      >
+        <ThermalTicket ticketData={createdTicket} branchName={branchName} />
+      </Modal>
 
       {/* ── Screen Hint ── */}
       <div className="display-hint">
@@ -1083,86 +1045,7 @@ const kioskStyles = `
     to { opacity: 1; transform: translateY(0); }
   }
 
-  /* ================= PRINT MEDIA STYLING (58mm Thermal Printer) ================= */
-  @media print {
-    @page {
-      size: 58mm auto;
-      margin: 0;
-    }
-    
-    html, body {
-      background: #ffffff !important;
-      color: #000000 !important;
-      font-family: 'Courier New', Courier, monospace;
-      width: 58mm;
-      margin: 0;
-      padding: 0;
-    }
 
-    /* Hide the entire web app view during printing */
-    #root, .display-root, .display-hint, .display-marquee-footer {
-      display: none !important;
-      visibility: hidden !important;
-    }
-
-    /* Print only the custom thermal ticket layout */
-    .ticket-print-layout {
-      display: block !important;
-      width: 54mm;
-      margin: 0 auto;
-      padding: 5mm 2mm;
-      text-align: center;
-      box-sizing: border-box;
-      color: #000000;
-      border: none;
-    }
-    
-    .ticket-header {
-      font-size: 13px;
-      font-weight: bold;
-      margin-bottom: 2px;
-      letter-spacing: 0.05em;
-    }
-    
-    .ticket-branch {
-      font-size: 10px;
-      margin-bottom: 4px;
-    }
-    
-    .ticket-divider {
-      font-size: 10px;
-      margin: 3px 0;
-    }
-    
-    .ticket-label {
-      font-size: 11px;
-      margin-top: 4px;
-      margin-bottom: 2px;
-    }
-    
-    .ticket-number {
-      font-size: 32px;
-      font-weight: bold;
-      margin: 5px 0;
-      line-height: 1;
-    }
-    
-    .ticket-time {
-      font-size: 9px;
-      margin-bottom: 4px;
-    }
-    
-    .ticket-footer {
-      font-size: 9px;
-      margin-top: 6px;
-    }
-  }
-
-  @media screen {
-    .ticket-print-layout {
-      display: none !important;
-    }
-  }
 
   /* ── Responsive adaptation for tablets landscape ── */
   @media (max-width: 1024px) {
