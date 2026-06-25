@@ -163,7 +163,7 @@ td{
 
     try {
       // 3. Stringify the page array
-      const pages = [pageHtml];
+      const pages = [{ html: pageHtml }];
       const json = JSON.stringify(pages);
 
       // 4. Compress using pako.gzip

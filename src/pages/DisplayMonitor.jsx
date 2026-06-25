@@ -306,7 +306,6 @@ export default function DisplayMonitor() {
       };
 
       setCreatedTicket(newTicket);
-      setShowPrintModal(true);
       setIsPrinting(false);
 
       // Run Bluetooth Print Flow in background
