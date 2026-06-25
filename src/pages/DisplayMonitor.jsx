@@ -210,7 +210,11 @@ export default function DisplayMonitor() {
   useEffect(() => {
     if (!branchId) return;
 
-    const socket = io(import.meta.env.VITE_API_URL, {
+    const API_BASE_URL = import.meta.env.VITE_API_URL;
+    const socketUrl = API_BASE_URL
+      ? API_BASE_URL.replace(/\/api$/, '')
+      : '/';
+    const socket = io(socketUrl, {
       transports: ['websocket', 'polling'],
     });
     socketRef.current = socket;
