@@ -7,12 +7,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': {
-        target: 'https://classical-ricky-superemas-23d4a4a4.koyeb.app',
-        changeOrigin: true,
-      },
       '/socket.io': {
-        target: 'https://classical-ricky-superemas-23d4a4a4.koyeb.app',
+        target: 'https://superemas-antrian-be.onrender.com',
         changeOrigin: true,
         ws: true,
       },

@@ -257,24 +257,6 @@ body::after {
   color: #bfdbfe;
 }
 
-/* ===== Print styles ===== */
-@media print {
-  body * {
-    visibility: hidden;
-  }
-
-  #print-ticket,
-  #print-ticket * {
-    visibility: visible;
-  }
-
-  #print-ticket {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 58mm;
-  }
-}
 
 /* ===== Light Mode Theme Overrides ===== */
 .light body {

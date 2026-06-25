@@ -6,6 +6,7 @@ import { useToast } from '../components/ui/Toast';
 import audioQueueService from '../services/audioQueueService';
 import { Modal } from '../components/ui/Modal';
 import { ThermalTicket } from '../components/ThermalTicket';
+import bluetoothPrintService from '../services/bluetoothPrintService';
 
 
 // ─── Helpers ───────────────────────────────────────────────
@@ -103,6 +104,49 @@ export default function DisplayMonitor() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
 
+  // Bluetooth Printer state (Open ESC / Android Intent)
+  const isPrinterConnected = true;
+  const printerName = 'Android Intent / Open ESC';
+
+  const handlePrintTest = async () => {
+    if (!isPrinterConnected) {
+      toast.error('Printer belum terhubung');
+      return;
+    }
+    try {
+      toast.info('Mencetak test...');
+      await bluetoothPrintService.printTicket({
+        number: 'TEST',
+        branchName: branchName,
+        time: new Date().toISOString()
+      });
+      toast.success('Test cetak berhasil');
+    } catch (err) {
+      console.error(err);
+      toast.error(`Gagal mencetak test: ${err.message}`);
+    }
+  };
+
+  const runBluetoothPrintFlow = async (ticketData) => {
+    try {
+      toast.info('Mencetak tiket...');
+      await bluetoothPrintService.printTicket(ticketData);
+      toast.success('Tiket berhasil dicetak');
+
+      setTimeout(() => {
+        setShowPrintModal(false);
+        setCreatedTicket(null);
+      }, 3000);
+    } catch (error) {
+      console.error('Print Error:', error);
+      toast.error(`Gagal mencetak tiket: ${error.message}`);
+      setTimeout(() => {
+        setShowPrintModal(false);
+        setCreatedTicket(null);
+      }, 7000);
+    }
+  };
+
   // Enable audio on first user interaction
   useEffect(() => {
     const enableAudio = () => {
@@ -166,10 +210,7 @@ export default function DisplayMonitor() {
   useEffect(() => {
     if (!branchId) return;
 
-    const socketUrl = import.meta.env.VITE_API_URL
-      ? import.meta.env.VITE_API_URL.replace(/\/api$/, '')
-      : '/';
-    const socket = io(socketUrl, {
+    const socket = io(import.meta.env.VITE_API_URL, {
       transports: ['websocket', 'polling'],
     });
     socketRef.current = socket;
@@ -244,6 +285,7 @@ export default function DisplayMonitor() {
 
   // Kiosk: Create and print ticket
   const handleCetakTiket = async () => {
+    if (isPrinting) return;
     try {
       setIsPrinting(true);
       const res = await api.post('/queues/take-number', {
@@ -255,34 +297,22 @@ export default function DisplayMonitor() {
       const newTicket = {
         number: ticket.queue_number,
         estimated: ticket.estimated_waiting,
-        time: new Date().toLocaleString('id-ID', {
-          dateStyle: 'medium',
-          timeStyle: 'medium'
-        })
+        time: new Date().toISOString(),
+        branchName: branchName
       };
 
       setCreatedTicket(newTicket);
       setShowPrintModal(true);
+      setIsPrinting(false);
+
+      // Run Bluetooth Print Flow in background
+      runBluetoothPrintFlow(newTicket);
     } catch (err) {
       console.error(err);
       setIsPrinting(false);
       toast.error('Gagal mengambil nomor antrian');
     }
   };
-
-  // Trigger window.print() once the print modal is open and ticket data is available
-  useEffect(() => {
-    if (showPrintModal && createdTicket) {
-      const timer = setTimeout(() => {
-        window.print();
-        // Reset state after printing finishes
-        setShowPrintModal(false);
-        setCreatedTicket(null);
-        setIsPrinting(false);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [showPrintModal, createdTicket]);
 
   return (
     <div
@@ -439,6 +469,26 @@ export default function DisplayMonitor() {
                   <span>{isPrinting ? 'MENCETAK...' : 'CETAK TIKET'}</span>
                 </div>
               </button>
+            </div>
+
+            {/* Bluetooth Printer settings & status */}
+            <div className="kiosk-printer-section no-print">
+              <div className="kiosk-printer-header">
+                <span className="kiosk-printer-title">PRINTER UTILITY (OPEN ESC)</span>
+                <span className="kiosk-printer-badge connected">
+                  AKTIF
+                </span>
+              </div>
+              
+              <div className="kiosk-printer-name">
+                Mode: Android Intent Link
+              </div>
+              
+              <div className="kiosk-printer-controls">
+                <button onClick={handlePrintTest} className="kiosk-printer-btn test">
+                  Cetak Test Tiket
+                </button>
+              </div>
             </div>
 
             <div className="kiosk-footer">
@@ -1036,6 +1086,114 @@ const kioskStyles = `
     100% { opacity: 0; visibility: hidden; }
   }
 
+  /* Bluetooth Printer styles */
+  .kiosk-printer-section {
+    margin-top: 15px;
+    margin-bottom: 15px;
+    padding: 15px;
+    background: rgba(30, 10, 54, 0.35);
+    border: 1px solid rgba(143, 110, 189, 0.2);
+    border-radius: 12px;
+    text-align: left;
+  }
+  .kiosk-printer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .kiosk-printer-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #b08ee0;
+    letter-spacing: 0.1em;
+  }
+  .kiosk-printer-badge {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+  }
+  .kiosk-printer-badge.connected {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+  .kiosk-printer-badge.disconnected {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+  .kiosk-printer-name {
+    font-size: 11px;
+    color: #e2e8f0;
+    margin-bottom: 10px;
+    padding: 4px 8px;
+    background: rgba(15, 6, 28, 0.3);
+    border-radius: 6px;
+    word-break: break-all;
+  }
+  .kiosk-printer-controls {
+    margin-bottom: 10px;
+  }
+  .kiosk-printer-btn-group {
+    display: flex;
+    gap: 8px;
+  }
+  .kiosk-printer-btn {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+  }
+  .kiosk-printer-btn.connect {
+    background: #7b1fa2;
+    border: 1px solid #9c27b0;
+    color: #ffffff;
+  }
+  .kiosk-printer-btn.connect:hover {
+    background: #8e24aa;
+  }
+  .kiosk-printer-btn.test {
+    background: rgba(212, 168, 67, 0.15);
+    border: 1px solid rgba(212, 168, 67, 0.4);
+    color: #d4a843;
+  }
+  .kiosk-printer-btn.test:hover {
+    background: rgba(212, 168, 67, 0.25);
+  }
+  .kiosk-printer-btn.disconnect {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+  }
+  .kiosk-printer-btn.disconnect:hover {
+    background: rgba(239, 68, 68, 0.2);
+  }
+  .kiosk-printer-options {
+    display: flex;
+    align-items: center;
+  }
+  .kiosk-printer-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    color: #8f6ebd;
+    cursor: pointer;
+    user-select: none;
+  }
+  .kiosk-printer-checkbox {
+    accent-color: #7b1fa2;
+    cursor: pointer;
+  }
+
   /* Animation */
   .animate-fade-in {
     animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -1195,6 +1353,21 @@ const kioskStyles = `
   .light .display-hint {
     background: rgba(255, 255, 255, 0.95);
     border-color: rgba(139, 92, 246, 0.2);
+    color: #5c4399;
+  }
+
+  .light .kiosk-printer-section {
+    background: rgba(255, 255, 255, 0.6);
+    border-color: rgba(139, 92, 246, 0.15);
+  }
+  .light .kiosk-printer-title {
+    color: #5c4399;
+  }
+  .light .kiosk-printer-name {
+    color: #1e293b;
+    background: rgba(0, 0, 0, 0.05);
+  }
+  .light .kiosk-printer-checkbox-label {
     color: #5c4399;
   }
 `;
